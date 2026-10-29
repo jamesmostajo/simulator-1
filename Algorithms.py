@@ -1,5 +1,5 @@
 import numpy as np
-rng = np.random.default_rng()
+rng = np.random.default_rng(seed=2026)
 
 def random_prediction():
     return rng.choice([0, 1])
