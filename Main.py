@@ -1,6 +1,7 @@
 from Agents import Agent
 from Simulator import Simulator
 from Algorithms import *
+import itertools
 
 """ 
 This game is defined as the following, there are three coins,
@@ -11,9 +12,9 @@ and 35% to be the same coin. For the fair coin, the next flip is 40% for
 each biased coin and 20% to be fair again. Game starts with the fair coin
 """
 probability_matrix = [
-    [0.2, 0.4, 0.4], # fair
-    [0.5, 0.35, 0.15], # heads biased
-    [0.5, 0.15, 0.35], # tails biased
+    [0.6, 0.2, 0.2], # fair
+    [0.15, 0.7, 0.15], # heads biased
+    [0.15, 0.15, 0.7], # tails biased
 ]
 state_actions = [ # 0 is heads, 1 is tails
     [0.5, 0.5],  # fair
@@ -22,7 +23,7 @@ state_actions = [ # 0 is heads, 1 is tails
 ]
 initial_state = 0
 
-number_rounds = 1000
+number_rounds = 10000
 simulator = Simulator(
     markov_chain=probability_matrix,
     initial_state=initial_state,
@@ -55,14 +56,14 @@ for window_size in agent_memory_windows:
             prediction_algorithm=window_based_prediction_choice,
         )
     )
-    agents.append(
-        Agent(
-            agent_type={"window", "weighted", window_size},
-            initial_stack=agent_initial_stack_size,
-            memory_window_size=window_size,
-            prediction_algorithm=window_based_prediction_weighted,
-        )
-    )
+    # agents.append(
+    #     Agent(
+    #         agent_type={"window", "weighted", window_size},
+    #         initial_stack=agent_initial_stack_size,
+    #         memory_window_size=window_size,
+    #         prediction_algorithm=window_based_prediction_weighted,
+    #     )
+    # )
 
 # add ema based agents
 alpha_values = [0.05, 0.2, 0.5]
@@ -81,18 +82,18 @@ for alpha in alpha_values:
         )
     )
 
-    agents.append(
-        Agent(
-            agent_type={"alpha", "weighted", alpha},
-            initial_stack=agent_initial_stack_size,
-            prediction_algorithm=exponential_moving_average_prediction_weighted,
-            memory_window_size=1,
-            prediction_algorithm_parameters={
-                "alpha" : alpha,
-                "prediction_state" : {"probability" : 0.5}
-            }
-        )
-    )
+    # agents.append(
+    #     Agent(
+    #         agent_type={"alpha", "weighted", alpha},
+    #         initial_stack=agent_initial_stack_size,
+    #         prediction_algorithm=exponential_moving_average_prediction_weighted,
+    #         memory_window_size=1,
+    #         prediction_algorithm_parameters={
+    #             "alpha" : alpha,
+    #             "prediction_state" : {"probability" : 0.5}
+    #         }
+    #     )
+    # )
 
 # add oracle agent
 agents.append(
@@ -106,16 +107,16 @@ agents.append(
     )
 )
 
-agents.append(
-    Agent(
-        agent_type={"oracle", "weighted"},
-        initial_stack=agent_initial_stack_size,
-        prediction_algorithm=oracle_prediction_weighted,
-        prediction_algorithm_parameters={
-            "prediction_state" : {"probability": [0.5, 0.5]}
-        }
-    )
-)
+# agents.append(
+#     Agent(
+#         agent_type={"oracle", "weighted"},
+#         initial_stack=agent_initial_stack_size,
+#         prediction_algorithm=oracle_prediction_weighted,
+#         prediction_algorithm_parameters={
+#             "prediction_state" : {"probability": [0.5, 0.5]}
+#         }
+#     )
+# )
 
 for round in range(number_rounds):
     result, state_to_get_current_result = simulator.get_data(round)

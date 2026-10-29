@@ -3,13 +3,17 @@ from collections import deque
 class Agent:
     stack_size = 0
     prediction_algorithm = None
-    prediction_states_parameters = {}
 
-    def __init__(self, agent_type, initial_stack, prediction_algorithm, memory_window_size=0, prediction_algorithm_parameters={}):
+    def __init__(self, agent_type, initial_stack, prediction_algorithm, memory_window_size=0, prediction_algorithm_parameters=None):
         self.agent_type = agent_type
         self.stack_size = initial_stack
         self.prediction_algorithm = prediction_algorithm
-        self.prediction_states_parameters = prediction_algorithm_parameters.copy()
+        
+        if prediction_algorithm_parameters is None:
+            self.prediction_states_parameters = {}
+        else:
+            self.prediction_states_parameters = prediction_algorithm_parameters.copy()
+
         self.output_stats =  [0, 0, 0] #win, no-part, lose
         if memory_window_size > 0:
             self.prediction_states_parameters["memory_window"] = deque(maxlen=memory_window_size)

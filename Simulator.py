@@ -1,16 +1,9 @@
 import numpy as np
 
 class Simulator:
-    
-    probability_matrix = []
-    state_actions = []
-    time_series = []
-    current_state = 0
-    number_rounds = -1
-    number_states = -1
-
     def __init__(self, markov_chain, initial_state, state_actions, number_rounds):
         self.probability_matrix = markov_chain
+        self.time_series = []
         self.state_actions = state_actions
         self.current_state = initial_state
         self.number_rounds = number_rounds
