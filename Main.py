@@ -53,17 +53,9 @@ for window_size in agent_memory_windows:
             agent_type={"window", "decider", window_size},
             initial_stack=agent_initial_stack_size,
             memory_window_size=window_size,
-            prediction_algorithm=window_based_prediction_choice,
+            prediction_algorithm=window_based_prediction,
         )
     )
-    # agents.append(
-    #     Agent(
-    #         agent_type={"window", "weighted", window_size},
-    #         initial_stack=agent_initial_stack_size,
-    #         memory_window_size=window_size,
-    #         prediction_algorithm=window_based_prediction_weighted,
-    #     )
-    # )
 
 # add ema based agents
 alpha_values = [0.05, 0.2, 0.5]
@@ -73,7 +65,7 @@ for alpha in alpha_values:
         Agent(
             agent_type={"alpha", "decider", alpha},
             initial_stack=agent_initial_stack_size,
-            prediction_algorithm=exponential_moving_average_prediction_choice,
+            prediction_algorithm=exponential_moving_average_prediction,
             memory_window_size=1,
             prediction_algorithm_parameters={
                 "alpha" : alpha,
@@ -82,41 +74,17 @@ for alpha in alpha_values:
         )
     )
 
-    # agents.append(
-    #     Agent(
-    #         agent_type={"alpha", "weighted", alpha},
-    #         initial_stack=agent_initial_stack_size,
-    #         prediction_algorithm=exponential_moving_average_prediction_weighted,
-    #         memory_window_size=1,
-    #         prediction_algorithm_parameters={
-    #             "alpha" : alpha,
-    #             "prediction_state" : {"probability" : 0.5}
-    #         }
-    #     )
-    # )
-
 # add oracle agent
 agents.append(
     Agent(
         agent_type={"oracle", "decider"},
         initial_stack=agent_initial_stack_size,
-        prediction_algorithm=oracle_prediction_choice,
+        prediction_algorithm=oracle_prediction,
         prediction_algorithm_parameters={
             "prediction_state" : {"probability": [0.5, 0.5]}
         }
     )
 )
-
-# agents.append(
-#     Agent(
-#         agent_type={"oracle", "weighted"},
-#         initial_stack=agent_initial_stack_size,
-#         prediction_algorithm=oracle_prediction_weighted,
-#         prediction_algorithm_parameters={
-#             "prediction_state" : {"probability": [0.5, 0.5]}
-#         }
-#     )
-# )
 
 for round in range(number_rounds):
     result, state_to_get_current_result = simulator.get_data(round)

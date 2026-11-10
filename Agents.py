@@ -3,11 +3,13 @@ from collections import deque
 class Agent:
     stack_size = 0
     prediction_algorithm = None
+    betting_algorithm = None
 
-    def __init__(self, agent_type, initial_stack, prediction_algorithm, memory_window_size=0, prediction_algorithm_parameters=None):
+    def __init__(self, agent_type, initial_stack, prediction_algorithm, betting_algorithm, memory_window_size=0, prediction_algorithm_parameters=None,):
         self.agent_type = agent_type
         self.stack_size = initial_stack
         self.prediction_algorithm = prediction_algorithm
+        self.betting_algorithm = betting_algorithm
         
         if prediction_algorithm_parameters is None:
             self.prediction_states_parameters = {}
@@ -21,8 +23,10 @@ class Agent:
     def __repr__(self):
         return f"Agent of type {self.agent_type} has {self.output_stats[0]} correct outputs out of {self.output_stats[0] + self.output_stats[2]} guesses, with {self.output_stats[0]/(self.output_stats[0] + self.output_stats[2]):.2f} win rate"
     
-    def make_prediction_decision(self):
-        return self.prediction_algorithm(**self.prediction_states_parameters)
+    def make_bet(self):
+        prediction_signal = self.prediction_algorithm(**self.prediction_states_parameters)
+        bet = self.betting_algorithm(self.stack_size, prediction_signal)
+        return bet
 
     def adjust_memory(self, data):
         self.prediction_states_parameters["memory_window"].appendleft(data)
