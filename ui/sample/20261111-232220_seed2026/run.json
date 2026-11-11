@@ -1,0 +1,75 @@
+{
+  "master_seed": 2026,
+  "initial_state": 0,
+  "probability_matrix": [
+    [
+      0.6,
+      0.2,
+      0.2
+    ],
+    [
+      0.15,
+      0.7,
+      0.15
+    ],
+    [
+      0.15,
+      0.15,
+      0.7
+    ]
+  ],
+  "state_actions": [
+    [
+      0.5,
+      0.5
+    ],
+    [
+      0.75,
+      0.25
+    ],
+    [
+      0.25,
+      0.75
+    ]
+  ],
+  "initial_stack": 200,
+  "log_minimum_bet": 0.0,
+  "tolerance_values": [
+    0.0,
+    0.05,
+    0.1,
+    0.2,
+    0.3
+  ],
+  "fractional_size_scales": [
+    0.01,
+    0.02,
+    0.05,
+    0.1,
+    0.2
+  ],
+  "kelly_size_scales": [
+    0.25,
+    0.5,
+    0.75,
+    1.0
+  ],
+  "agent_memory_windows": [
+    2,
+    6,
+    10,
+    20,
+    50
+  ],
+  "alpha_values": [
+    0.05,
+    0.2,
+    0.5
+  ],
+  "number_rounds": 1000,
+  "number_agents": 406,
+  "created_at": "2026-11-11T23:22:20",
+  "git_commit": "66854d4f160565967da967f6c7a741eced159bac-dirty",
+  "python_version": "3.9.6",
+  "numpy_version": "2.0.2"
+}

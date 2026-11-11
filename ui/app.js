@@ -1,6 +1,12 @@
 import { LineChart } from "./chart.js";
 
-const RESULTS_ROOT = "../results";
+// where runs are read from, relative to this page. Local runs live in results/ (git-ignored);
+// the committed sample in ui/sample/ is what GitHub Pages serves. Missing sources are skipped.
+const IS_LOCAL = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
+const DATA_SOURCES = [
+  ...(IS_LOCAL ? [{ key: "local", label: "local", root: "../results" }] : []), // only exists when served from your machine
+  { key: "sample", label: "sample", root: "sample" },
+];
 const MAX_CHART_POINTS = 1200; // long runs are thinned out evenly for drawing
 const LN10 = Math.log(10);
 
@@ -37,7 +43,7 @@ const COLUMNS = [
 
 const state = {
   runs: [],
-  runName: null,
+  runId: null,
   meta: null,
   agents: [],
   logStack: null,
@@ -53,30 +59,43 @@ const $ = (selector) => document.querySelector(selector);
 const chart = new LineChart($("#chart"), { onHover: showReadout });
 
 // ---------- loading ----------
+// reads the run list from every data source that exists
+async function findRuns() {
+  const lists = await Promise.all(DATA_SOURCES.map(async (source) => {
+    try {
+      const response = await fetch(`${source.root}/index.json`, { cache: "no-store" });
+      if (!response.ok) return [];
+      const runs = await response.json();
+      return runs.map((run) => ({ ...run, id: `${source.key}/${run.run}`, base: `${source.root}/${run.run}`, source: source.label }));
+    } catch {
+      return [];
+    }
+  }));
+  return lists.flat();
+}
+
 async function start() {
-  try {
-    const response = await fetch(`${RESULTS_ROOT}/index.json`, { cache: "no-store" });
-    if (!response.ok) throw new Error();
-    state.runs = await response.json();
-  } catch {
-    return showMessage("No results found. Run python3 Main.py from the project folder, then reload this page.");
+  state.runs = await findRuns();
+  if (!state.runs.length) {
+    return showMessage("No runs found. Run python3 Main.py from the project folder (or python3 publish_sample.py for the published sample), then reload.");
   }
-  if (!state.runs.length) return showMessage("No runs in results/ yet. Run python3 Main.py, then reload.");
+  const showSource = new Set(state.runs.map((run) => run.source)).size > 1;
 
   const select = $("#run-select");
   select.innerHTML = "";
   for (const run of state.runs) {
     const option = document.createElement("option");
-    option.value = run.run;
-    option.textContent = `${run.created_at?.replace("T", " ") ?? run.run} · seed ${run.master_seed} · ${run.number_rounds} rounds`;
+    option.value = run.id;
+    option.textContent = `${showSource ? `${run.source} · ` : ""}${run.created_at?.replace("T", " ") ?? run.run} · seed ${run.master_seed} · ${run.number_rounds} rounds`;
     select.append(option);
   }
-  select.addEventListener("change", () => loadRun(select.value));
-  await loadRun(state.runs[0].run);
+  select.addEventListener("change", () => loadRun(state.runs.find((run) => run.id === select.value)));
+  await loadRun(state.runs[0]);
 }
 
-async function loadRun(runName) {
-  const base = `${RESULTS_ROOT}/${runName}`;
+async function loadRun(run) {
+  const base = run.base;
+  const runName = run.run;
   try {
     const [meta, csvText, npyBuffer] = await Promise.all([
       fetch(`${base}/run.json`, { cache: "no-store" }).then(okJson),
@@ -84,7 +103,7 @@ async function loadRun(runName) {
       fetch(`${base}/log_stack.npy`, { cache: "no-store" }).then(okBuffer),
     ]);
     const npy = parseNpy(npyBuffer);
-    state.runName = runName;
+    state.runId = run.id;
     state.meta = meta;
     state.agents = parseCsv(csvText).map(prepareAgent);
     state.logStack = npy.data;
@@ -204,7 +223,7 @@ function renderRunMeta() {
   const m = state.meta;
   $("#run-meta").textContent =
     `seed ${m.master_seed} · ${m.number_rounds} rounds · ${m.number_agents} agents · starting stack ${m.initial_stack} · ${m.created_at?.replace("T", " ") ?? ""}`;
-  $("#run-select").value = state.runName;
+  $("#run-select").value = state.runId;
 }
 
 function renderSummary(visible) {

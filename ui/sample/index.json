@@ -1,0 +1,9 @@
+[
+  {
+    "run": "20261111-232220_seed2026",
+    "created_at": "2026-11-11T23:22:20",
+    "master_seed": 2026,
+    "number_rounds": 1000,
+    "number_agents": 406
+  }
+]

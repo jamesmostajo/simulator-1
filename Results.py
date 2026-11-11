@@ -35,7 +35,7 @@ def _git_commit():
     # commit the code was run from, with "-dirty" if there were uncommitted changes
     try:
         commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
-        dirty = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, check=True).stdout.strip()
+        dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], capture_output=True, text=True, check=True).stdout.strip()
         return commit + ("-dirty" if dirty else "")
     except (OSError, subprocess.CalledProcessError):
         return None
