@@ -28,11 +28,12 @@ def exponential_moving_average_prediction(memory_window, alpha, prediction_state
 def oracle_prediction(prediction_state):
     return prob_to_signal(prediction_state["probability"][1]) # we only need P(Tails) to get signal
 
-# betting algorithms
-def fractional_betting(stack, signal, tolerance, size_scale):
-    return (gate(signal, tolerance) * stack * size_scale, side(signal))
+# betting algorithms, return (fraction of the stack to bet, side)
+# the agent turns the fraction into an actual bet, so stacks can be tracked in log space
+def fractional_betting(signal, tolerance, size_scale):
+    return (gate(signal, tolerance) * size_scale, side(signal))
 
-def kelly_betting(stack, signal, tolerance, size_scale, b=1):
+def kelly_betting(signal, tolerance, size_scale, b=1):
     probability = (abs(signal)+1)/2
     optimal_bet = probability - ((1-probability)/b)
-    return (gate(signal, tolerance) * optimal_bet * stack * size_scale, side(signal))
+    return (gate(signal, tolerance) * optimal_bet * size_scale, side(signal))

@@ -1,6 +1,7 @@
 from Agents import Agent
 from Simulator import Simulator
 from Algorithms import *
+from Results import save_results
 import itertools
 import numpy as np
 
@@ -60,14 +61,16 @@ for betting_name, betting in betting_algorithms.items():
             "algorithm": betting["algorithm"],
             "parameters": {"tolerance": tolerance, "size_scale": size_scale},
             "labels": {betting_name, f"size={size_scale}", f"tol={tolerance}"},
+            "info": {"betting": betting_name, "size_scale": size_scale, "tolerance": tolerance},
         })
 
 agent_memory_windows = [2, 6, 10, 20, 50]
 alpha_values = [0.05, 0.2, 0.5]
-random_config = [{"labels": {"random"}, "algorithm": random_prediction, "uses_rng": True}]
+random_config = [{"labels": {"random"}, "info": {"predictor": "random"}, "algorithm": random_prediction, "uses_rng": True}]
 window_configs = [
     {
         "labels": {"window", f"window={window_size}"},
+        "info": {"predictor": "window", "window": window_size},
         "algorithm": window_based_prediction,
         "memory_window_size": window_size,
     }
@@ -76,6 +79,7 @@ window_configs = [
 ema_configs = [
     {
         "labels": {"alpha", f"alpha={alpha}"},
+        "info": {"predictor": "ema", "alpha": alpha},
         "algorithm": exponential_moving_average_prediction,
         "memory_window_size": 1,
         "parameters": {"alpha": alpha, "prediction_state": {"probability": 0.5}},
@@ -89,6 +93,7 @@ for prediction, betting in itertools.product(prediction_configurations, betting_
     agents.append(
         Agent(
             agent_type=prediction["labels"] | betting["labels"],
+            agent_info=prediction["info"] | betting["info"],
             initial_stack=agent_initial_stack_size,
             prediction_algorithm=prediction["algorithm"],
             memory_window_size=prediction.get("memory_window_size", 0),
@@ -104,6 +109,7 @@ for prediction, betting in itertools.product(prediction_configurations, betting_
 agents.append(
     Agent(
         agent_type={"oracle"},
+        agent_info={"predictor": "oracle", "betting": "kelly", "size_scale": 1, "tolerance": 0},
         initial_stack=agent_initial_stack_size,
         prediction_algorithm=oracle_prediction,
         prediction_algorithm_parameters={
@@ -119,30 +125,35 @@ agents.append(
 for round_number in range(number_rounds):
     result, state_to_get_current_result = simulator.get_data(round_number)
     for agent in agents:
-        if agent.bankrupt:
+        if agent.bankrupt: # out of the game, stops recording
             continue
 
         if agent.observes_hidden_state:
             agent.update_hidden_state(state_actions[state_to_get_current_result])
 
-        bet, predicted_side = agent.make_bet()
+        bet_fraction, bet_side = agent.make_bet()
 
         if agent.uses_memory:
             agent.adjust_memory(result)
 
-        if bet <= 0:
-            agent.output_stats[1] += 1
-        elif predicted_side == result:
-            agent.output_stats[0] += 1
-            agent.stack_size += bet
-        else:
-            agent.output_stats[2] += 1
-            agent.stack_size -= bet
-
-            # can't cover the minimum bet anymore
-            if agent.stack_size < agent.minimum_bet:
-                agent.bankrupt = True
-                agent.bankrupt_round = round_number
+        agent.settle(bet_fraction, bet_side, result, round_number)
 
 for x in agents:
     print(x)
+
+# save the run in the standard results format (see Results.py)
+run_info = {
+    "master_seed": MASTER_SEED,
+    "initial_state": initial_state,
+    "probability_matrix": probability_matrix,
+    "state_actions": state_actions,
+    "initial_stack": agent_initial_stack_size,
+    "log_minimum_bet": agents[0].log_minimum_bet,
+    "tolerance_values": tolerance_values,
+    "fractional_size_scales": fractional_size_scales,
+    "kelly_size_scales": kelly_size_scales,
+    "agent_memory_windows": agent_memory_windows,
+    "alpha_values": alpha_values,
+}
+run_dir = save_results(agents, simulator, run_info)
+print(f"\nresults saved to {run_dir}")
