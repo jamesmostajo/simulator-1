@@ -5,11 +5,13 @@
 //   x: number[],
 //   series: [{ name, values: (number|null)[], color, width?, dash?, endLabel? }],
 //   bands:  [{ lo: number[], hi: number[], color }],
-//   refLines: [{ y, label }],
+//   refLines: [{ y, label }],   horizontal dashed lines
+//   vLines: [{ x, label, color? }], vertical dashed lines
 //   yLabel: string,
+//   xLabel: string (default "round"),
 // }
 
-const PAD = { top: 12, bottom: 34, left: 58 };
+const PAD = { top: 12, bottom: 34, left: 68 };
 const HOVER_DISTANCE = 18; // px from a line to count as hovering it
 
 export class LineChart {
@@ -119,9 +121,9 @@ export class LineChart {
 
     // axis titles
     ctx.textAlign = "right";
-    ctx.fillText("round", plot.right, plot.bottom + 20);
+    ctx.fillText(this.data.xLabel ?? "round", plot.right, plot.bottom + 20);
     ctx.save();
-    ctx.translate(12, plot.top);
+    ctx.translate(10, plot.top);
     ctx.rotate(-Math.PI / 2);
     ctx.textAlign = "right";
     ctx.fillText(this.data.yLabel || "", 0, 0);
@@ -137,7 +139,19 @@ export class LineChart {
       ctx.beginPath(); ctx.moveTo(plot.left, y); ctx.lineTo(plot.right, y); ctx.stroke();
       if (r.label) ctx.fillText(r.label, plot.left + 6, y - 3);
     }
+    // vertical marker lines
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    (this.data.vLines || []).forEach((v, k) => {
+      if (v.x < this.xMin || v.x > this.xMax) return;
+      const x = Math.round(this.px(v.x)) + 0.5;
+      ctx.strokeStyle = v.color || theme.muted;
+      ctx.beginPath(); ctx.moveTo(x, plot.top); ctx.lineTo(x, plot.bottom); ctx.stroke();
+      // labels step down so markers that are close together stay readable
+      if (v.label) { ctx.fillStyle = v.color || theme.muted; ctx.fillText(v.label, x + 4, plot.top + 2 + k * 14); }
+    });
     ctx.setLineDash([]);
+    ctx.fillStyle = theme.muted;
 
     // clip lines and bands to the plot area
     ctx.save();

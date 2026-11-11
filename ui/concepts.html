@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Simulator Concepts</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="site-nav">
+    <a href="index.html">Results</a>
+    <a href="concepts.html" aria-current="page">Concepts</a>
+  </nav>
+  <header class="page-header">
+    <div>
+      <h1>Concepts</h1>
+      <p class="muted">The ideas behind the simulator: the game, how agents predict, how they bet, and how results are measured.</p>
+    </div>
+  </header>
+
+  <main>
+    <section class="prose" style="padding-top: 24px">
+      <p>
+        The simulator asks a simple question: when the rules of a random system are hidden and keep shifting,
+        how well can an agent predict it, and how should it bet on those predictions? Every agent sees the same
+        coin flips. Each one combines a prediction strategy (how it estimates the next flip) with a betting
+        strategy (how much of its stack to risk), and we compare how their stacks grow over time.
+      </p>
+      <p class="muted">
+        The interactive figures below run a fresh copy of the game in your browser, with the same rules as the simulator.
+      </p>
+    </section>
+
+    <nav class="contents" aria-label="Contents">
+      <a href="#markov"><span class="number">01</span>Markov chains: the game</a>
+      <a href="#signal"><span class="number">02</span>From probability to a signal</a>
+      <a href="#window"><span class="number">03</span>Window-based prediction</a>
+      <a href="#ema"><span class="number">04</span>Exponential moving average</a>
+      <a href="#tolerance"><span class="number">05</span>Tolerance</a>
+      <a href="#fractional"><span class="number">06</span>Fractional betting</a>
+      <a href="#kelly"><span class="number">07</span>Kelly betting and size scale</a>
+      <a href="#logs"><span class="number">08</span>Log stack and log growth</a>
+      <a href="#bankruptcy"><span class="number">09</span>Minimum bet and bankruptcy</a>
+      <a href="#baselines"><span class="number">10</span>Baselines: random and oracle</a>
+      <a href="#parameters"><span class="number">11</span>Parameters at a glance</a>
+    </nav>
+
+    <!-- 01 Markov chains -->
+    <section class="concept" id="markov">
+      <h2><span class="number">01</span>Markov chains: the game</h2>
+      <div class="prose">
+        <p>
+          A Markov chain is a system that moves between a fixed set of states, where the chance of moving to each
+          next state depends only on the current state, not on how it got there. It is described completely by a
+          transition matrix: row <em>i</em> lists the probability of going from state <em>i</em> to every other state,
+          and each row adds up to 1.
+        </p>
+        <p>
+          In this game the states are three coins. A fair coin lands tails 50% of the time, a heads-biased coin 25%,
+          and a tails-biased coin 75%. After every flip the game may switch coins according to the matrix below.
+          The game starts on the fair coin.
+        </p>
+      </div>
+
+      <div class="markov-figure">
+        <svg id="markov-diagram" viewBox="-20 0 480 370" role="img" aria-label="Diagram of the three coins and the chances of switching between them"></svg>
+        <div>
+          <table class="data-table" aria-label="Transition matrix">
+            <thead>
+              <tr><th>from \ to</th><th>fair</th><th>heads-biased</th><th>tails-biased</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>fair</td><td>0.60</td><td>0.20</td><td>0.20</td></tr>
+              <tr><td>heads-biased</td><td>0.15</td><td>0.70</td><td>0.15</td></tr>
+              <tr><td>tails-biased</td><td>0.15</td><td>0.15</td><td>0.70</td></tr>
+            </tbody>
+          </table>
+          <table class="data-table" aria-label="Coin properties">
+            <thead>
+              <tr><th>coin</th><th>P(tails)</th><th>average stay</th><th>long-run share</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>fair</td><td>0.50</td><td>2.5 flips</td><td>27.3%</td></tr>
+              <tr><td>heads-biased</td><td>0.25</td><td>3.3 flips</td><td>36.4%</td></tr>
+              <tr><td>tails-biased</td><td>0.75</td><td>3.3 flips</td><td>36.4%</td></tr>
+            </tbody>
+          </table>
+          <p class="muted" style="font-size: 12px">
+            Average stay is 1 / (1 − chance of staying). Long-run share is the stationary distribution:
+            how often each coin is in play over a long game.
+          </p>
+        </div>
+      </div>
+
+      <div class="demo">
+        <div class="block-head" style="margin-bottom: 6px">
+          <span class="demo-caption">A simulated stretch of the game. Shade shows the hidden coin, marks show each flip (up = tails, down = heads).</span>
+          <button type="button" class="button" id="markov-reroll">new sequence</button>
+        </div>
+        <div class="legend" id="markov-legend"></div>
+        <canvas class="strip" id="markov-strip"></canvas>
+        <div class="demo-readout" id="markov-readout"></div>
+      </div>
+
+      <h3>Two layers of hidden information</h3>
+      <div class="prose">
+        <p>
+          Agents only see the flips. They never see which coin is in play (the first hidden layer), and they are
+          never told the coins' biases or how often the coins switch (the second hidden layer). This setup is called
+          a hidden Markov model. A run of tails might mean the tails-biased coin is in play, or it might be luck on
+          the fair coin, and by the time an agent is fairly sure, the coin may already have switched.
+        </p>
+      </div>
+
+      <div class="why">
+        <div class="why-label">Why it is used here</div>
+        <p>
+          A Markov chain is the simplest model of a system that is random but not structureless: there are patterns
+          (coins persist for a few flips), yet they are hidden and keep changing. That makes it a clean test of
+          whether agents can find structure in noise without being given the rules.
+        </p>
+        <p>
+          The numbers are deliberately hard. Coins stay for only about three flips, and the biases are modest, so
+          even an agent that knew the rules perfectly could only predict about 55% of flips correctly.
+        </p>
+      </div>
+    </section>
+
+    <!-- 02 Signal -->
+    <section class="concept" id="signal">
+      <h2><span class="number">02</span>From probability to a signal</h2>
+      <div class="prose">
+        <p>
+          Every prediction strategy produces an estimate of P(tails), the chance the next flip is tails. The agent
+          turns that into a signal between −1 and +1:
+        </p>
+        <div class="formula">signal = 2 × P(tails) − 1</div>
+        <ul>
+          <li>The sign picks the side: positive bets tails, negative bets heads.</li>
+          <li>The size is the confidence: 0 means "no idea" (50/50), 1 means "certain".</li>
+        </ul>
+        <p>
+          For example, P(tails) = 0.75 gives a signal of +0.5, a moderate lean towards tails.
+        </p>
+      </div>
+      <div class="why">
+        <div class="why-label">Why it is used here</div>
+        <p>
+          The signal separates prediction from betting. Every predictor speaks the same language, so any predictor
+          can be paired with any betting strategy, and the simulator can test every combination. Its size is also
+          exactly what Kelly betting needs (section 07).
+        </p>
+      </div>
+    </section>
+
+    <!-- 03 Window -->
+    <section class="concept" id="window">
+      <h2><span class="number">03</span>Window-based prediction</h2>
+      <div class="prose">
+        <p>
+          The window agent remembers only the last N flips and estimates P(tails) as the share of tails among them:
+        </p>
+        <div class="formula">P(tails) = tails in the last N flips / N</div>
+        <p>
+          A small window reacts quickly when the coin changes but is very noisy: a window of 2 can only say 0%, 50%
+          or 100%. A large window is smooth but slow, still averaging over coins that are long gone.
+        </p>
+      </div>
+
+      <div class="demo" id="estimators-demo">
+        <div class="demo-controls">
+          <div class="slider-row">
+            <label for="window-size">window size N</label>
+            <input type="range" id="window-size" min="1" max="50" step="1" value="10">
+            <output id="window-size-value">10</output>
+          </div>
+          <div class="slider-row">
+            <label for="ema-alpha">EMA alpha</label>
+            <input type="range" id="ema-alpha" min="0.02" max="0.9" step="0.01" value="0.3">
+            <output id="ema-alpha-value">0.30</output>
+          </div>
+        </div>
+        <div class="legend" id="estimators-legend"></div>
+        <div class="chart-wrap"><canvas id="estimators-chart"></canvas></div>
+        <div class="demo-readout" id="estimators-readout"></div>
+      </div>
+
+      <div class="why">
+        <div class="why-label">Why it is used here</div>
+        <p>
+          It is the most intuitive way to learn from recent data, and it assumes nothing about the game. The window
+          sizes tested (2, 6, 10, 20, 50) range from shorter than a typical coin's stay to many times longer, so the
+          results show the trade-off between reacting fast and averaging out noise.
+        </p>
+      </div>
+    </section>
+
+    <!-- 04 EMA -->
+    <section class="concept" id="ema">
+      <h2><span class="number">04</span>Exponential moving average (EMA)</h2>
+      <div class="prose">
+        <p>
+          The EMA agent keeps one running estimate and nudges it towards each new flip (1 for tails, 0 for heads):
+        </p>
+        <div class="formula">P(tails) ← alpha × latest flip + (1 − alpha) × P(tails)</div>
+        <p>
+          Instead of a hard cut-off, older flips fade away gradually: each flip's weight shrinks by a factor of
+          (1 − alpha) every round. Alpha sets the memory, roughly the last 1 / alpha flips. A high alpha reacts fast and
+          is noisy; a low alpha is smooth and slow. It starts at 0.5 (no opinion). The chart above shows it next to the
+          window estimate.
+        </p>
+      </div>
+      <div class="why">
+        <div class="why-label">Why it is used here</div>
+        <p>
+          It captures the same idea as the window with a smoother memory, and only needs to store one number.
+          The values tested (0.05, 0.2, 0.5) cover slow, medium and fast memory.
+        </p>
+        <p>
+          Both the window and the EMA can become overconfident. After a short streak they can report 90 to 100%
+          confidence, while even an agent that knew the game's rules would never be more than about 58% sure.
+          That matters a lot for Kelly betting.
+        </p>
+      </div>
+    </section>
+
+    <!-- 05 Tolerance -->
+    <section class="concept" id="tolerance">
+      <h2><span class="number">05</span>Tolerance</h2>
+      <div class="prose">
+        <p>
+          Tolerance is the minimum confidence needed to place a bet. If the size of the signal is not above the
+          tolerance, the agent skips the round:
+        </p>
+        <div class="formula">bet only if |signal| > tolerance</div>
+        <p>
+          The figure shows the EMA signal from the chart above (using its alpha). Rounds inside the shaded band are
+          skipped.
+        </p>
+      </div>
+      <div class="demo">
+        <div class="demo-controls">
+          <div class="slider-row">
+            <label for="tolerance-slider">tolerance</label>
+            <input type="range" id="tolerance-slider" min="0" max="0.6" step="0.01" value="0.1">
+            <output id="tolerance-value">0.10</output>
+          </div>
+        </div>
+        <div class="chart-wrap short"><canvas id="tolerance-chart"></canvas></div>
+        <div class="demo-readout" id="tolerance-readout"></div>
+      </div>
+      <div class="why">
+        <div class="why-label">Why it is used here</div>
+        <p>
+          Weak signals are mostly noise. Betting on them costs money without adding much edge, so a tolerance can
+          filter them out. The values tested (0, 0.05, 0.1, 0.2, 0.3) go from betting on everything to betting only on
+          strong signals.
+        </p>
+        <p>
+          The trade-off is fewer bets. A tolerance that is too high can stop an agent from ever betting: a careful
+          predictor whose signal never goes above 0.2 would sit out every round at tolerance 0.2.
+        </p>
+      </div>
+    </section>
+
+    <!-- 06 Fractional -->
+    <section class="concept" id="fractional">
+      <h2><span class="number">06</span>Fractional betting</h2>
+      <div class="prose">
+        <p>
+          A fractional bettor stakes the same share of its current stack every time it bets, whatever its confidence:
+        </p>
+        <div class="formula">bet = size scale × stack</div>
+        <p>
+          Because the bet is a share of the stack, wins and losses compound: bets grow after wins and shrink after
+          losses, so the agent can never lose everything in one round. Only the direction of the prediction matters,
+          so what counts is how often the agent is right. A larger share needs a higher win rate just to break even,
+          because a loss hurts more than an equal win helps:
+        </p>
+        <table class="data-table" id="breakeven-table" aria-label="Break-even win rate for each fraction"></table>
+      </div>
+      <div class="why">
+        <div class="why-label">Why it is used here</div>
+        <p>
+          It is the simplest sensible way to size bets, and a natural baseline. The sizes tested (1, 2, 5, 10 and 20% of
+          the stack) range from very cautious to aggressive. It also isolates the predictor's direction from its
+          confidence: two predictors that always pick the same side get identical results.
+        </p>
+      </div>
+    </section>
+
+    <!-- 07 Kelly -->
+    <section class="concept" id="kelly">
+      <h2><span class="number">07</span>Kelly betting and size scale</h2>
+      <div class="prose">
+        <p>
+          The Kelly criterion picks the share of the stack that makes it grow fastest over the long run. For an even-money
+          bet won with probability p:
+        </p>
+        <div class="formula">Kelly share = p − (1 − p) = 2p − 1 = |signal|</div>
+        <p>
+          So with the signal from section 02, the Kelly bet is simply the signal's size as a share of the stack. A 60%
+          belief bets 20%, and a 50% belief bets nothing. The figure shows the expected log growth per round for every
+          share, given a true win chance p. Growth peaks at the Kelly share, falls on either side, and turns negative
+          when betting about twice the Kelly share.
+        </p>
+      </div>
+      <div class="demo">
+        <div class="demo-controls">
+          <div class="slider-row">
+            <label for="kelly-p">true win chance p</label>
+            <input type="range" id="kelly-p" min="0.5" max="0.85" step="0.01" value="0.6">
+            <output id="kelly-p-value">0.60</output>
+          </div>
+        </div>
+        <div class="legend" id="kelly-legend"></div>
+        <div class="chart-wrap"><canvas id="kelly-chart"></canvas></div>
+        <div class="demo-readout" id="kelly-readout"></div>
+      </div>
+      <div class="prose">
+        <h3>Size scale: betting a fraction of Kelly</h3>
+        <p>
+          Kelly is only optimal if the probability is right. The size scale multiplies the Kelly bet:
+        </p>
+        <div class="formula">bet = size scale × |signal| × stack</div>
+        <p>
+          Half Kelly (0.5) gives up about a quarter of the growth in exchange for much smaller swings, and protects
+          against an overconfident estimate. Betting more than Kelly only adds risk.
+        </p>
+      </div>
+      <div class="why">
+        <div class="why-label">Why it is used here</div>
+        <p>
+          Kelly ties the bet to the agent's confidence, so it rewards calibrated predictions and punishes overconfident
+          ones. That makes it the right tool for testing whether agents' probabilities are trustworthy, not just whether
+          they pick the right side.
+        </p>
+        <p>
+          The sizes tested (0.25, 0.5, 0.75 and 1.0) run from quarter Kelly to full Kelly. Full Kelly is the textbook
+          optimum only for an agent that knows the true probability, which only the oracle does. For agents that learn
+          from flips, full Kelly tends to bet too much.
+        </p>
+      </div>
+    </section>
+
+    <!-- 08 Logs -->
+    <section class="concept" id="logs">
+      <h2><span class="number">08</span>Log stack and log growth</h2>
+      <div class="prose">
+        <p>
+          Each agent tracks the natural log of its stack instead of the stack itself. A bet that wins or loses a share f
+          of the stack multiplies it by (1 + f) or (1 − f), and logs turn multiplying into adding:
+        </p>
+        <div class="formula">log stack ← log stack + ln(1 + f)    after a win
+log stack ← log stack + ln(1 − f)    after a loss</div>
+        <p>
+          Log growth is how far the log stack has moved from the start: ln(stack / starting stack). A log growth of 0 means
+          even with the start, +1 means about 2.7 times the start, +2.3 means 10 times, and −0.69 means half.
+          The stack itself is never needed.
+        </p>
+      </div>
+      <div class="demo">
+        <div class="demo-pair">
+          <div>
+            <div class="demo-caption">Stack in chips</div>
+            <div class="chart-wrap short"><canvas id="linear-chart"></canvas></div>
+          </div>
+          <div>
+            <div class="demo-caption">The same stack as log growth</div>
+            <div class="chart-wrap short"><canvas id="log-chart"></canvas></div>
+          </div>
+        </div>
+        <div class="demo-readout" id="logs-readout"></div>
+      </div>
+      <h3>Why averages of returns mislead</h3>
+      <div class="prose">
+        <p>
+          Win 50% and then lose 50%: the average return is 0%, but 100 chips become 150 and then 75. In logs this is
+          ln(1.5) + ln(0.5) = −0.29, correctly negative. Repeated bets compound, so the log tells the true story of growth
+          over time.
+        </p>
+      </div>
+      <div class="why">
+        <div class="why-label">Why it is used here</div>
+        <p>
+          Three reasons. Stacks grow exponentially (a successful agent's stack can pass 10<sup>300</sup>, where regular
+          numbers overflow), and log values never overflow. Log growth is the quantity Kelly maximises, so it is the right
+          measure of success. And on a log scale, steady compounding looks like a straight line, so agents with very
+          different results can be compared on one chart.
+        </p>
+      </div>
+    </section>
+
+    <!-- 09 Bankruptcy -->
+    <section class="concept" id="bankruptcy">
+      <h2><span class="number">09</span>Minimum bet and bankruptcy</h2>
+      <div class="prose">
+        <p>
+          Every bet must be at least 1 chip. If a strategy asks for less (for example, 1% of an 80-chip stack is 0.8),
+          the agent bets 1 instead. An agent that cannot cover 1 chip is bankrupt: it stops playing and its record ends
+          at that round. A skipped round (signal under the tolerance) is different: the strategy chose not to bet, and
+          the minimum does not apply.
+        </p>
+        <p>
+          In log terms, bankrupt means a log stack below ln(1) = 0, which is why a bankrupt agent's final log stack is
+          negative.
+        </p>
+      </div>
+      <div class="why">
+        <div class="why-label">Why it is used here</div>
+        <p>
+          Without a minimum, a losing agent could keep betting tiny fractions forever and never really fail. The minimum
+          makes ruin possible, as it is in a real game. Raising small bets to 1 chip (instead of skipping them) keeps
+          cautious agents with small stacks playing, rather than leaving them frozen while they appear to survive.
+        </p>
+      </div>
+    </section>
+
+    <!-- 10 Baselines -->
+    <section class="concept" id="baselines">
+      <h2><span class="number">10</span>Baselines: random and oracle</h2>
+      <div class="prose">
+        <p>
+          Two agents frame every result. The random agent draws its P(tails) uniformly between 0 and 1 every round, so
+          it has no skill. The oracle is told which coin produces each flip and predicts with the true probability,
+          so it has the best possible information and bets full Kelly.
+        </p>
+      </div>
+      <div class="why">
+        <div class="why-label">Why it is used here</div>
+        <p>
+          A strategy only means something relative to these two bounds. Doing better than random shows real skill, not
+          luck. The gap to the oracle shows how much the two hidden layers cost: no agent that sees only flips can reach
+          the oracle, which is why it is shown separately on the results page.
+        </p>
+      </div>
+    </section>
+
+    <!-- 11 Parameters -->
+    <section class="concept" id="parameters">
+      <h2><span class="number">11</span>Parameters at a glance</h2>
+      <table class="data-table param-table" aria-label="Simulator parameters">
+        <thead>
+          <tr><th>parameter</th><th>values</th><th>what it controls</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>window</td><td>2, 6, 10, 20, 50</td><td>How many recent flips the window agent averages.</td></tr>
+          <tr><td>alpha</td><td>0.05, 0.2, 0.5</td><td>How quickly the EMA agent forgets older flips.</td></tr>
+          <tr><td>tolerance</td><td>0, 0.05, 0.1, 0.2, 0.3</td><td>Minimum signal size needed to place a bet.</td></tr>
+          <tr><td>size scale (fractional)</td><td>0.01, 0.02, 0.05, 0.1, 0.2</td><td>Share of the stack bet each time.</td></tr>
+          <tr><td>size scale (kelly)</td><td>0.25, 0.5, 0.75, 1.0</td><td>Fraction of the Kelly bet (1.0 is full Kelly).</td></tr>
+          <tr><td>starting stack</td><td>200 chips</td><td>Each agent's money at the start.</td></tr>
+          <tr><td>minimum bet</td><td>1 chip</td><td>Smallest allowed bet, and the bankruptcy line.</td></tr>
+          <tr><td>rounds</td><td>1,000</td><td>Length of each game.</td></tr>
+          <tr><td>master seed</td><td>2026</td><td>One seed drives all randomness, so a run can be repeated exactly.</td></tr>
+        </tbody>
+      </table>
+      <p class="muted" style="font-size: 12px">
+        Every predictor is paired with every betting setup: 9 predictor settings × 45 betting setups = 405 agents, plus the oracle.
+      </p>
+    </section>
+  </main>
+
+  <script type="module" src="concepts.js"></script>
+</body>
+</html>
