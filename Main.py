@@ -35,54 +35,73 @@ simulator.generate_time_series_data()
 agents = []
 agent_initial_stack_size = 200
 
-# add random agents
-agents.append(
-    Agent(
-        agent_type={"random"},
-        initial_stack=agent_initial_stack_size,
-        prediction_algorithm=random_prediction,
-    )
-)
+# betting parameter grids
+tolerance_values = [0.0, 0.05, 0.1, 0.2, 0.3] # minimum |signal| needed to place a bet
+fractional_size_scales = [0.01, 0.02, 0.05, 0.1, 0.2] # fraction of stack bet each round
+kelly_size_scales = [0.25, 0.5, 0.75, 1.0] # fraction of the kelly bet (1.0 = full kelly)
 
-# add window based agents
+betting_algorithms = {
+    "fractional": {"algorithm": fractional_betting, "size_scales": fractional_size_scales},
+    "kelly": {"algorithm": kelly_betting, "size_scales": kelly_size_scales},
+}
+
+betting_configurations = []
+for betting_name, betting in betting_algorithms.items():
+    for size_scale, tolerance in itertools.product(betting["size_scales"], tolerance_values):
+        betting_configurations.append({
+            "name": betting_name,
+            "algorithm": betting["algorithm"],
+            "parameters": {"tolerance": tolerance, "size_scale": size_scale},
+            "labels": {betting_name, f"size={size_scale}", f"tol={tolerance}"},
+        })
+
 agent_memory_windows = [2, 6, 10, 20, 50]
-
-for window_size in agent_memory_windows:
-    agents.append(
-        Agent(
-            agent_type={"window", "decider", window_size},
-            initial_stack=agent_initial_stack_size,
-            memory_window_size=window_size,
-            prediction_algorithm=window_based_prediction,
-        )
-    )
-
-# add ema based agents
 alpha_values = [0.05, 0.2, 0.5]
+random_config = [{"labels": {"random"}, "algorithm": random_prediction}]
+window_configs = [
+    {
+        "labels": {"window", f"window={window_size}"},
+        "algorithm": window_based_prediction,
+        "memory_window_size": window_size,
+    }
+    for window_size in agent_memory_windows
+]
+ema_configs = [
+    {
+        "labels": {"alpha", f"alpha={alpha}"},
+        "algorithm": exponential_moving_average_prediction,
+        "memory_window_size": 1,
+        "parameters": {"alpha": alpha, "prediction_state": {"probability": 0.5}},
+    }
+    for alpha in alpha_values
+]
+prediction_configurations = random_config + window_configs + ema_configs
 
-for alpha in alpha_values:
+# every prediction configuration x every betting configuration
+for prediction, betting in itertools.product(prediction_configurations, betting_configurations):
     agents.append(
         Agent(
-            agent_type={"alpha", "decider", alpha},
+            agent_type=prediction["labels"] | betting["labels"],
             initial_stack=agent_initial_stack_size,
-            prediction_algorithm=exponential_moving_average_prediction,
-            memory_window_size=1,
-            prediction_algorithm_parameters={
-                "alpha" : alpha,
-                "prediction_state" : {"probability" : 0.5}
-            }
+            prediction_algorithm=prediction["algorithm"],
+            memory_window_size=prediction.get("memory_window_size", 0),
+            prediction_algorithm_parameters=prediction.get("parameters"),
+            betting_algorithm=betting["algorithm"],
+            betting_algorithm_parameters=betting["parameters"],
         )
     )
 
 # add oracle agent
 agents.append(
     Agent(
-        agent_type={"oracle", "decider"},
+        agent_type={"oracle"},
         initial_stack=agent_initial_stack_size,
         prediction_algorithm=oracle_prediction,
         prediction_algorithm_parameters={
-            "prediction_state" : {"probability": [0.5, 0.5]}
-        }
+            "prediction_state" : {"probability": [0.5,  0.5]}
+        },
+        betting_algorithm=kelly_betting,
+        betting_algorithm_parameters={"tolerance": 0, "size_scale": 1}
     )
 )
 

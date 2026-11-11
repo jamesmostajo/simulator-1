@@ -1,20 +1,26 @@
 from collections import deque
+import copy
 
 class Agent:
     stack_size = 0
     prediction_algorithm = None
     betting_algorithm = None
 
-    def __init__(self, agent_type, initial_stack, prediction_algorithm, betting_algorithm, memory_window_size=0, prediction_algorithm_parameters=None,):
+    def __init__(self, agent_type, initial_stack, prediction_algorithm, betting_algorithm, memory_window_size=0, prediction_algorithm_parameters=None, betting_algorithm_parameters=None):
         self.agent_type = agent_type
         self.stack_size = initial_stack
         self.prediction_algorithm = prediction_algorithm
         self.betting_algorithm = betting_algorithm
+
+        if betting_algorithm_parameters is None:
+            self.betting_params = {}
+        else:
+            self.betting_params = copy.deepcopy(betting_algorithm_parameters)
         
         if prediction_algorithm_parameters is None:
             self.prediction_states_parameters = {}
         else:
-            self.prediction_states_parameters = prediction_algorithm_parameters.copy()
+            self.prediction_states_parameters = copy.deepcopy(prediction_algorithm_parameters)
 
         self.output_stats =  [0, 0, 0] #win, no-part, lose
         if memory_window_size > 0:
@@ -25,7 +31,7 @@ class Agent:
     
     def make_bet(self):
         prediction_signal = self.prediction_algorithm(**self.prediction_states_parameters)
-        bet = self.betting_algorithm(self.stack_size, prediction_signal)
+        bet = self.betting_algorithm(self.stack_size, prediction_signal, **self.betting_params)
         return bet
 
     def adjust_memory(self, data):
