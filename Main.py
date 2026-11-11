@@ -23,7 +23,7 @@ state_actions = [ # 0 is heads, 1 is tails
 ]
 initial_state = 0
 
-number_rounds = 10000
+number_rounds = 1000
 simulator = Simulator(
     markov_chain=probability_matrix,
     initial_state=initial_state,
@@ -108,20 +108,30 @@ agents.append(
 for round in range(number_rounds):
     result, state_to_get_current_result = simulator.get_data(round)
     for agent in agents:
+        if agent.bankrupt: # out of the game, doesn't count as a skip
+            continue
+
         if "oracle" in agent.agent_type:
             agent.prediction_states_parameters["prediction_state"]["probability"] = state_actions[state_to_get_current_result]
 
-        prediction = agent.make_prediction_decision()
+        bet, predicted_side = agent.make_bet()
 
         if "window" in agent.agent_type or "alpha" in agent.agent_type:
             agent.adjust_memory(result)
 
-        if prediction == result:
-            agent.output_stats[0] += 1
-        elif prediction == -1:
+        if bet <= 0: # gated out, no participation
             agent.output_stats[1] += 1
+        elif predicted_side == result:
+            agent.output_stats[0] += 1
+            agent.stack_size += bet
         else:
             agent.output_stats[2] += 1
+            agent.stack_size -= bet
+
+            # can't cover the minimum bet anymore
+            if agent.stack_size < agent.minimum_bet:
+                agent.bankrupt = True
+                agent.bankrupt_round = round
 
 for x in agents:
     print(x)

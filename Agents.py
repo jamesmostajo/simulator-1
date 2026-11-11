@@ -1,5 +1,6 @@
 from collections import deque
 import copy
+import math
 
 class Agent:
     stack_size = 0
@@ -9,6 +10,7 @@ class Agent:
     def __init__(self, agent_type, initial_stack, prediction_algorithm, betting_algorithm, memory_window_size=0, prediction_algorithm_parameters=None, betting_algorithm_parameters=None):
         self.agent_type = agent_type
         self.stack_size = initial_stack
+        self.initial_stack = initial_stack
         self.prediction_algorithm = prediction_algorithm
         self.betting_algorithm = betting_algorithm
 
@@ -22,17 +24,49 @@ class Agent:
         else:
             self.prediction_states_parameters = copy.deepcopy(prediction_algorithm_parameters)
 
+        self.minimum_bet = 1
+        self.bankrupt = False # set once the stack can no longer cover the minimum bet
+        self.bankrupt_round = None # round the agent went bankrupt in, None if it never did
+
         self.output_stats =  [0, 0, 0] #win, no-part, lose
         if memory_window_size > 0:
             self.prediction_states_parameters["memory_window"] = deque(maxlen=memory_window_size)
 
     def __repr__(self):
-        return f"Agent of type {self.agent_type} has {self.output_stats[0]} correct outputs out of {self.output_stats[0] + self.output_stats[2]} guesses, with {self.output_stats[0]/(self.output_stats[0] + self.output_stats[2]):.2f} win rate"
+        wins, skips, losses = self.output_stats
+        bets = wins + losses
+        win_rate = f"{wins / bets:.1%}" if bets > 0 else "n/a"
+        label = ", ".join(sorted(map(str, self.agent_type)))
+
+        if not math.isfinite(self.stack_size):
+            stack = "overflow"
+            growth = "n/a"
+        elif self.bankrupt:
+            stack = f"bankrupt in round {self.bankrupt_round} ({self.stack_size:.3g} left)"
+            growth = f"{self.stack_size / self.initial_stack:.3g}x"
+        else:
+            stack = f"{self.stack_size:.4g}"
+            growth = f"{self.stack_size / self.initial_stack:.3g}x"
+
+        return (
+            f"[{label}] "
+            f"stack {stack} ({growth} of {self.initial_stack}) | "
+            f"bets {bets} (W {wins} / L {losses}), skipped {skips} | "
+            f"win rate {win_rate}"
+        )
     
     def make_bet(self):
+        if self.bankrupt or self.stack_size < self.minimum_bet:
+            self.bankrupt = True
+            return (0, None)
+
         prediction_signal = self.prediction_algorithm(**self.prediction_states_parameters)
-        bet = self.betting_algorithm(self.stack_size, prediction_signal, **self.betting_params)
-        return bet
+        bet, bet_side = self.betting_algorithm(self.stack_size, prediction_signal, **self.betting_params)
+
+        if 0 < bet and bet < self.minimum_bet:
+            bet = self.minimum_bet
+
+        return (bet, bet_side)
 
     def adjust_memory(self, data):
         self.prediction_states_parameters["memory_window"].appendleft(data)
