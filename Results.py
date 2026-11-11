@@ -4,19 +4,22 @@ Saves a finished run in a standard format, one folder per run:
     results/<timestamp>_seed<master seed>/
         run.json          settings of the run (seed, game, grids, rounds, versions)
         agents.csv        one row per agent: its settings and final metrics
-        trajectories.npz  per-round data:
-                            log_stack      (agents x rounds + 1) natural log of each agent's stack,
-                                           column 0 is the start, column t + 1 is after round t,
-                                           NaN after the agent went bankrupt
-                            agent_id       (agents,) row order of log_stack, matches agents.csv
-                            outcomes       (rounds,) each flip, 0 heads / 1 tails
-                            hidden_states  (rounds,) coin that produced each flip
+        log_stack.npy     (agents x rounds + 1) float64, natural log of each agent's stack,
+                          row i is the agent with agent_id i in agents.csv,
+                          column 0 is the start, column t + 1 is after round t,
+                          NaN after the agent went bankrupt
+        outcomes.npy      (rounds,) int8, each flip, 0 heads / 1 tails
+        hidden_states.npy (rounds,) int8, coin that produced each flip
+
+    results/index.json    list of every run in the folder, newest first (used by the ui)
+
+Plain .npy files are used (not .npz) so the browser ui can read them directly.
 
 Loading it back:
     import json, numpy as np, pandas as pd
     run = json.load(open(f"{run_dir}/run.json"))
     agents = pd.read_csv(f"{run_dir}/agents.csv")
-    data = np.load(f"{run_dir}/trajectories.npz")
+    log_stack = np.load(f"{run_dir}/log_stack.npy")
 """
 import csv
 import datetime
@@ -87,16 +90,33 @@ def save_results(agents, simulator, run_info, output_root="results"):
         writer.writeheader()
         writer.writerows(rows)
 
-    # trajectories.npz
+    # per-round data
     log_stack = np.full((len(agents), number_rounds + 1), np.nan)
     for agent_id, agent in enumerate(agents):
         log_stack[agent_id, :len(agent.log_stack_history)] = agent.log_stack_history
-    np.savez_compressed(
-        os.path.join(run_dir, "trajectories.npz"),
-        log_stack=log_stack,
-        agent_id=np.arange(len(agents)),
-        outcomes=np.array([int(outcome) for outcome, _ in simulator.time_series]),
-        hidden_states=np.array([int(state) for _, state in simulator.time_series]),
-    )
+    np.save(os.path.join(run_dir, "log_stack.npy"), log_stack)
+    np.save(os.path.join(run_dir, "outcomes.npy"), np.array([outcome for outcome, _ in simulator.time_series], dtype=np.int8))
+    np.save(os.path.join(run_dir, "hidden_states.npy"), np.array([state for _, state in simulator.time_series], dtype=np.int8))
 
+    update_index(output_root)
     return run_dir
+
+
+def update_index(output_root="results"):
+    # rebuilds results/index.json from every run folder that has a run.json
+    runs = []
+    for name in os.listdir(output_root):
+        run_file = os.path.join(output_root, name, "run.json")
+        if os.path.isfile(run_file):
+            with open(run_file) as f:
+                run = json.load(f)
+            runs.append({
+                "run": name,
+                "created_at": run.get("created_at"),
+                "master_seed": run.get("master_seed"),
+                "number_rounds": run.get("number_rounds"),
+                "number_agents": run.get("number_agents"),
+            })
+    runs.sort(key=lambda run: run["created_at"] or "", reverse=True)
+    with open(os.path.join(output_root, "index.json"), "w") as f:
+        json.dump(runs, f, indent=2)

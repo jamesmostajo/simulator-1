@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Simulator Results</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="page-header">
+    <div>
+      <h1>Simulator results</h1>
+      <p id="run-meta" class="muted"></p>
+    </div>
+    <label class="run-picker">
+      <span class="muted">run</span>
+      <select id="run-select"></select>
+    </label>
+  </header>
+
+  <main>
+    <p id="message" class="message" hidden></p>
+
+    <section id="summary" class="summary" aria-label="Summary"></section>
+
+    <section class="block" aria-label="Filters">
+      <div class="block-head">
+        <h2>Filters</h2>
+        <button type="button" id="clear-filters" class="text-button">clear</button>
+      </div>
+      <div id="filters" class="filters"></div>
+    </section>
+
+    <section class="block" aria-label="Log growth over time">
+      <div class="block-head">
+        <h2>Log growth over time</h2>
+        <span id="readout" class="readout muted"></span>
+      </div>
+      <div id="chart-controls" class="controls"></div>
+      <div class="chart-wrap">
+        <canvas id="chart"></canvas>
+      </div>
+      <p class="note muted">
+        Log growth is ln(stack / starting stack): 0 means even with the start, +1 is about 2.7 times the start.
+        Agents stop once bankrupt. In groups, a bankrupt agent counts at the bankruptcy level (1 chip) from then on.
+        Click a table row to pin that agent on the chart.
+      </p>
+    </section>
+
+    <section class="block" aria-label="Agents">
+      <div class="block-head">
+        <h2>Agents</h2>
+        <span id="table-count" class="muted"></span>
+      </div>
+      <div class="table-wrap">
+        <table id="agents-table">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
