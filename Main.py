@@ -7,9 +7,9 @@ import itertools
 This game is defined as the following, there are three coins,
 two of which are biased, one is biased to flip heads 75% of the time,
 another is biased to flip tails 75% of the time. From the biased coins,
-the next flip is 50% to be the fair coin, 15% to be the other biased coin,
-and 35% to be the same coin. For the fair coin, the next flip is 40% for 
-each biased coin and 20% to be fair again. Game starts with the fair coin
+the next flip is 15% to be the fair coin, 15% to be the other biased coin,
+and 70% to be the same coin. For the fair coin, the next flip is 20% for 
+each biased coin and 60% to be fair again. Game starts with the fair coin
 """
 probability_matrix = [
     [0.6, 0.2, 0.2], # fair
