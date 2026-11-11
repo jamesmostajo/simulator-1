@@ -1,8 +1,9 @@
 import numpy as np
 
 class Simulator:
-    def __init__(self, markov_chain, initial_state, state_actions, number_rounds):
+    def __init__(self, markov_chain, initial_state, state_actions, number_rounds, seed=None):
         self.probability_matrix = markov_chain
+        self.seed = seed
         self.time_series = []
         self.state_actions = state_actions
         self.current_state = initial_state
@@ -10,7 +11,7 @@ class Simulator:
         self.number_states = len(self.probability_matrix)
 
     def generate_time_series_data(self):
-        rng = np.random.default_rng()
+        rng = np.random.default_rng(self.seed)
         for rounds in range(self.number_rounds):
             state_decision = rng.choice(range(len(self.state_actions[self.current_state])), p=self.state_actions[self.current_state])
             prev_state = self.current_state

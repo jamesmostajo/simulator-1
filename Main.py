@@ -2,6 +2,12 @@ from Agents import Agent
 from Simulator import Simulator
 from Algorithms import *
 import itertools
+import numpy as np
+
+# universal seeding, every random generator in the run is derived from this one seed
+MASTER_SEED = 2026
+master_seed_sequence = np.random.SeedSequence(MASTER_SEED)
+simulator_seed, agents_seed = master_seed_sequence.spawn(2) # independent streams for the game and the agents
 
 """ 
 This game is defined as the following, there are three coins,
@@ -28,7 +34,8 @@ simulator = Simulator(
     markov_chain=probability_matrix,
     initial_state=initial_state,
     state_actions=state_actions,
-    number_rounds=number_rounds
+    number_rounds=number_rounds,
+    seed=simulator_seed
 )
 simulator.generate_time_series_data()
 
@@ -57,7 +64,7 @@ for betting_name, betting in betting_algorithms.items():
 
 agent_memory_windows = [2, 6, 10, 20, 50]
 alpha_values = [0.05, 0.2, 0.5]
-random_config = [{"labels": {"random"}, "algorithm": random_prediction}]
+random_config = [{"labels": {"random"}, "algorithm": random_prediction, "uses_rng": True}]
 window_configs = [
     {
         "labels": {"window", f"window={window_size}"},
@@ -88,6 +95,8 @@ for prediction, betting in itertools.product(prediction_configurations, betting_
             prediction_algorithm_parameters=prediction.get("parameters"),
             betting_algorithm=betting["algorithm"],
             betting_algorithm_parameters=betting["parameters"],
+            uses_rng=prediction.get("uses_rng", False),
+            seed=agents_seed.spawn(1)[0],
         )
     )
 
@@ -101,25 +110,27 @@ agents.append(
             "prediction_state" : {"probability": [0.5,  0.5]}
         },
         betting_algorithm=kelly_betting,
-        betting_algorithm_parameters={"tolerance": 0, "size_scale": 1}
+        betting_algorithm_parameters={"tolerance": 0, "size_scale": 1},
+        observes_hidden_state=True,
+        seed=agents_seed.spawn(1)[0],
     )
 )
 
-for round in range(number_rounds):
-    result, state_to_get_current_result = simulator.get_data(round)
+for round_number in range(number_rounds):
+    result, state_to_get_current_result = simulator.get_data(round_number)
     for agent in agents:
-        if agent.bankrupt: # out of the game, doesn't count as a skip
+        if agent.bankrupt:
             continue
 
-        if "oracle" in agent.agent_type:
-            agent.prediction_states_parameters["prediction_state"]["probability"] = state_actions[state_to_get_current_result]
+        if agent.observes_hidden_state:
+            agent.update_hidden_state(state_actions[state_to_get_current_result])
 
         bet, predicted_side = agent.make_bet()
 
-        if "window" in agent.agent_type or "alpha" in agent.agent_type:
+        if agent.uses_memory:
             agent.adjust_memory(result)
 
-        if bet <= 0: # gated out, no participation
+        if bet <= 0:
             agent.output_stats[1] += 1
         elif predicted_side == result:
             agent.output_stats[0] += 1
@@ -131,7 +142,7 @@ for round in range(number_rounds):
             # can't cover the minimum bet anymore
             if agent.stack_size < agent.minimum_bet:
                 agent.bankrupt = True
-                agent.bankrupt_round = round
+                agent.bankrupt_round = round_number
 
 for x in agents:
     print(x)

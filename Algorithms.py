@@ -1,6 +1,3 @@
-import numpy as np
-rng = np.random.default_rng(seed=2026)
-
 def prob_to_signal(probability):
     return 2*probability - 1
 
@@ -11,7 +8,7 @@ def side(signal):
     return 0 if signal < 0 else 1
 
 # prediction algorithms
-def random_prediction():
+def random_prediction(rng):
     return prob_to_signal(rng.random())
 
 def window_based_prediction(memory_window):

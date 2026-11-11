@@ -1,13 +1,14 @@
 from collections import deque
 import copy
 import math
+import numpy as np
 
 class Agent:
     stack_size = 0
     prediction_algorithm = None
     betting_algorithm = None
 
-    def __init__(self, agent_type, initial_stack, prediction_algorithm, betting_algorithm, memory_window_size=0, prediction_algorithm_parameters=None, betting_algorithm_parameters=None):
+    def __init__(self, agent_type, initial_stack, prediction_algorithm, betting_algorithm, memory_window_size=0, prediction_algorithm_parameters=None, betting_algorithm_parameters=None, observes_hidden_state=False, uses_rng=False, seed=None):
         self.agent_type = agent_type
         self.stack_size = initial_stack
         self.initial_stack = initial_stack
@@ -25,12 +26,21 @@ class Agent:
             self.prediction_states_parameters = copy.deepcopy(prediction_algorithm_parameters)
 
         self.minimum_bet = 1
-        self.bankrupt = False # set once the stack can no longer cover the minimum bet
-        self.bankrupt_round = None # round the agent went bankrupt in, None if it never did
+        self.bankrupt = False
+        self.bankrupt_round = None
 
         self.output_stats =  [0, 0, 0] #win, no-part, lose
-        if memory_window_size > 0:
+
+        # behaviour flags, the simulation loop checks these instead of agent_type labels
+        self.uses_memory = memory_window_size > 0
+        self.observes_hidden_state = observes_hidden_state # oracle only condition
+
+        if self.uses_memory:
             self.prediction_states_parameters["memory_window"] = deque(maxlen=memory_window_size)
+
+        self.rng = np.random.default_rng(seed)
+        if uses_rng:
+            self.prediction_states_parameters["rng"] = self.rng
 
     def __repr__(self):
         wins, skips, losses = self.output_stats
@@ -70,5 +80,8 @@ class Agent:
 
     def adjust_memory(self, data):
         self.prediction_states_parameters["memory_window"].appendleft(data)
+
+    def update_hidden_state(self, state_probabilities):
+        self.prediction_states_parameters["prediction_state"]["probability"] = state_probabilities
 
     
